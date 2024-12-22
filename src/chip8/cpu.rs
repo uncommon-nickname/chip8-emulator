@@ -46,14 +46,18 @@ impl Cpu
         let second = system_bus.ram.read(self.pc + 1) as u16;
         let opcode = first | second;
 
-        let pc_update = match ((opcode & 0xF000) >> 12,
-                               (opcode & 0x0F00) >> 8,
-                               (opcode & 0x00F0) >> 4,
-                               (opcode & 0x000F) >> 0)
+        let parsed = ((opcode & 0xF000) >> 12,
+                      (opcode & 0x0F00) >> 8, // x
+                      (opcode & 0x00F0) >> 4, // y
+                      (opcode & 0x000F)); //     n
+
+        let pc_update = match parsed
         {
+            (0x00, 0x00, 0x0E, 0x00) => self.op_00e0(system_bus),
             (0x00, 0x00, 0x0E, 0x0E) => self.op_00ee(),
             (0x01, ..) => self.op_1nnn(opcode & 0x0FFF),
             (0x02, ..) => self.op_2nnn(opcode & 0x0FFF),
+            (0x03, ..) => self.op_3xkk(parsed.1, opcode & 0x00FF),
             _ => ExecutionFlow::Next,
         };
 
@@ -63,6 +67,13 @@ impl Cpu
             ExecutionFlow::Next => self.pc += 2,
             ExecutionFlow::SkipNext => self.pc += 4,
         }
+    }
+
+    #[inline]
+    fn op_00e0(&self, system_bus: &mut SystemBus) -> ExecutionFlow
+    {
+        system_bus.gpu.clear();
+        ExecutionFlow::Next
     }
 
     #[inline]
@@ -83,5 +94,15 @@ impl Cpu
     {
         self.stack.push(self.pc + 2);
         ExecutionFlow::Jump(addr)
+    }
+
+    #[inline]
+    fn op_3xkk(&self, x: u16, kk: u16) -> ExecutionFlow
+    {
+        if self.vx[x as usize] == kk as u8
+        {
+            return ExecutionFlow::SkipNext;
+        }
+        ExecutionFlow::Next
     }
 }
