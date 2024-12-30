@@ -12,6 +12,6 @@ impl Timer
 
     pub(super) fn decrement(&mut self)
     {
-        let _ = self.cycles.saturating_sub(1);
+        self.cycles = self.cycles.saturating_sub(1);
     }
 }
