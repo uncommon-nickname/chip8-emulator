@@ -4,10 +4,12 @@ mod ram;
 mod system_bus;
 mod timer;
 
+use std::fs::File;
+use std::io::Read;
 use std::thread::sleep;
 use std::time::Duration;
 
-use cpu::Cpu;
+use cpu::{Cpu, START_ADDR};
 use system_bus::SystemBus;
 
 pub(crate) struct Chip8Emulator
@@ -23,6 +25,16 @@ impl Chip8Emulator
     pub(crate) fn new(timer_hz: usize, cpu_hz: usize) -> Self
     {
         Self { cpu: Cpu::new(), system_bus: SystemBus::new(), timer_hz, cpu_hz }
+    }
+
+    pub(crate) fn load_rom(&mut self, file: &str)
+    {
+        let mut handle = File::open(file).expect("ROM file was not found.");
+        let mut buff = [0; 3584];
+
+        handle.read(&mut buff).expect("Could not read the ROM contents.");
+
+        self.system_bus.ram.write_bulk(&mut buff, START_ADDR as usize);
     }
 
     pub(crate) fn run(&mut self)

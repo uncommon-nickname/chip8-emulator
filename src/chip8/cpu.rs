@@ -1,7 +1,7 @@
 use super::system_bus::SystemBus;
 
 const NUM_REGISTERS: usize = 16;
-const START_ADDR: u16 = 0x200;
+pub(super) const START_ADDR: u16 = 0x200;
 const STACK_SIZE: usize = 16;
 
 pub(super) struct Cpu

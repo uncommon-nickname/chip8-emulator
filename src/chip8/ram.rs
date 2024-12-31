@@ -1,4 +1,4 @@
-const RAM_SIZE: usize = 4096;
+pub(super) const RAM_SIZE: usize = 4096;
 const FONTS_SIZE: usize = 80;
 
 const FONTS: [u8; FONTS_SIZE] = [
@@ -42,6 +42,11 @@ impl Ram
     {
         self.memory[addr as usize]
     }
+
+    pub(super) fn write_bulk(&mut self, data: &mut [u8], start: usize)
+    {
+        self.memory[start..start + data.len()].copy_from_slice(data);
+    }
 }
 
 #[cfg(test)]
@@ -63,5 +68,16 @@ mod tests
         ram.memory[0x200] = 0x01;
 
         assert_eq!(ram.read(0x200), 0x01);
+    }
+
+    #[test]
+    fn write_ram_bulk()
+    {
+        let mut ram = Ram::preload();
+        let mut buff = [1, 2, 3, 4];
+
+        ram.write_bulk(&mut buff, 0x200);
+
+        assert_eq!(ram.memory[0x200..0x204], [1, 2, 3, 4]);
     }
 }
