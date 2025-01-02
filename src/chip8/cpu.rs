@@ -3,6 +3,7 @@ use super::system_bus::SystemBus;
 const NUM_REGISTERS: usize = 16;
 pub(super) const START_ADDR: u16 = 0x200;
 const STACK_SIZE: usize = 16;
+const VF_REGISTER: usize = 0x0F;
 
 pub(super) struct Cpu
 {
@@ -53,11 +54,34 @@ impl Cpu
 
         let pc_update = match parsed
         {
+            // CLS: Clear the display.
             (0x00, 0x00, 0x0E, 0x00) => self.op_00e0(system_bus),
+            // RET: Return from subroutine.
             (0x00, 0x00, 0x0E, 0x0E) => self.op_00ee(),
+            // JP: Jump to the address `nnn`.
             (0x01, ..) => self.op_1nnn(opcode & 0x0FFF),
+            // CALL: Call the subroutine at address `nnn`.
             (0x02, ..) => self.op_2nnn(opcode & 0x0FFF),
+            // SE Vx, kk: Skip if equal.
             (0x03, ..) => self.op_3xkk(parsed.1, opcode & 0x00FF),
+            // SNE: Vx, kk: Skip if not equal.
+            (0x04, ..) => self.op_4xkk(parsed.1, opcode & 0x00FF),
+            // LD Vx, kk: Set the value in register.
+            (0x06, ..) => self.op_6xkk(parsed.1, opcode & 0x00FF),
+            // ADD Vx, kk: Add value to the existing one.
+            (0x07, ..) => self.op_7xkk(parsed.1, opcode & 0x00FF),
+            // SE Vx, Vy: Skip if equal.
+            (0x05, .., 0x00) => self.op_5xy0(parsed.1, parsed.2),
+            // LD Vx, Vy: Set the value in register.
+            (0x08, .., 0x00) => self.op_8xy0(parsed.1, parsed.2),
+            // OR Vx, Vy: Set the value in register.
+            (0x08, .., 0x01) => self.op_8xy1(parsed.1, parsed.2),
+            // AND Vx, Vy: Set the value in register.
+            (0x08, .., 0x02) => self.op_8xy2(parsed.1, parsed.2),
+            // XOR Vx, Vy: Set the value in register.
+            (0x08, .., 0x03) => self.op_8xy3(parsed.1, parsed.2),
+            // ADD Vx, Vy: Add value to the existing one.
+            (0x08, .., 0x04) => self.op_8xy4(parsed.1, parsed.2),
             _ => ExecutionFlow::Next,
         };
 
@@ -84,16 +108,16 @@ impl Cpu
     }
 
     #[inline]
-    fn op_1nnn(&mut self, addr: u16) -> ExecutionFlow
+    fn op_1nnn(&mut self, nnn: u16) -> ExecutionFlow
     {
-        ExecutionFlow::Jump(addr)
+        ExecutionFlow::Jump(nnn)
     }
 
     #[inline]
-    fn op_2nnn(&mut self, addr: u16) -> ExecutionFlow
+    fn op_2nnn(&mut self, nnn: u16) -> ExecutionFlow
     {
         self.stack.push(self.pc + 2);
-        ExecutionFlow::Jump(addr)
+        ExecutionFlow::Jump(nnn)
     }
 
     #[inline]
@@ -103,6 +127,79 @@ impl Cpu
         {
             return ExecutionFlow::SkipNext;
         }
+        ExecutionFlow::Next
+    }
+
+    #[inline]
+    fn op_4xkk(&self, x: u16, kk: u16) -> ExecutionFlow
+    {
+        if self.vx[x as usize] != kk as u8
+        {
+            return ExecutionFlow::SkipNext;
+        }
+        ExecutionFlow::Next
+    }
+
+    #[inline]
+    fn op_6xkk(&mut self, x: u16, kk: u16) -> ExecutionFlow
+    {
+        self.vx[x as usize] = kk as u8;
+        ExecutionFlow::Next
+    }
+
+    #[inline]
+    fn op_7xkk(&mut self, x: u16, kk: u16) -> ExecutionFlow
+    {
+        self.vx[x as usize] += kk as u8;
+        ExecutionFlow::Next
+    }
+
+    #[inline]
+    fn op_5xy0(&self, x: u16, y: u16) -> ExecutionFlow
+    {
+        if self.vx[x as usize] == self.vx[y as usize]
+        {
+            return ExecutionFlow::SkipNext;
+        }
+        ExecutionFlow::Next
+    }
+
+    #[inline]
+    fn op_8xy0(&mut self, x: u16, y: u16) -> ExecutionFlow
+    {
+        self.vx[x as usize] = self.vx[y as usize];
+        ExecutionFlow::Next
+    }
+
+    #[inline]
+    fn op_8xy1(&mut self, x: u16, y: u16) -> ExecutionFlow
+    {
+        self.vx[x as usize] |= self.vx[y as usize];
+        ExecutionFlow::Next
+    }
+
+    #[inline]
+    fn op_8xy2(&mut self, x: u16, y: u16) -> ExecutionFlow
+    {
+        self.vx[x as usize] &= self.vx[y as usize];
+        ExecutionFlow::Next
+    }
+
+    #[inline]
+    fn op_8xy3(&mut self, x: u16, y: u16) -> ExecutionFlow
+    {
+        self.vx[x as usize] ^= self.vx[y as usize];
+        ExecutionFlow::Next
+    }
+
+    #[inline]
+    fn op_8xy4(&mut self, x: u16, y: u16) -> ExecutionFlow
+    {
+        let result = self.vx[x as usize] as u16 + self.vx[y as usize] as u16;
+
+        self.vx[x as usize] = result as u8;
+        self.vx[VF_REGISTER] = if result > u8::MAX as u16 { 1 } else { 0 };
+
         ExecutionFlow::Next
     }
 }
